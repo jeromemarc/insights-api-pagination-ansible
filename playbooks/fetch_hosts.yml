@@ -8,7 +8,7 @@
     hcc_client_secret: xxxx
     auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
     api_url: "https://console.redhat.com/api/inventory/v1/hosts"
-    per_page: 100  # Adjust as neededi
+    per_page: 100
     staleness: fresh
     all_hosts: []
   tasks:
