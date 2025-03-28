@@ -54,6 +54,7 @@
     - name: Fetch remaining pages
       include_tasks: get_hosts.yml
       loop: "{{ range(2, (total_pages | int) +1) | list }}"
+      when: total_pages | int > 1
 
     - name: Display all retrieved hosts
       debug:
