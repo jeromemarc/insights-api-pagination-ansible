@@ -1,0 +1,16 @@
+---
+- name: Fetch hosts (Page {{ item }})
+  uri:
+    url: "{{ api_url }}?page={{ item }}&per_page={{ per_page }}&staleness={{ staleness }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ rh_api_token }}"
+      Content-Type: "application/json"
+    return_content: yes
+  register: response
+  no_log: true
+  failed_when: response.json is not defined or response.json.results is not defined  
+
+- name: Append results to host list
+  set_fact:
+    all_hosts: "{{ all_hosts | default([]) + response.json.results }}"
