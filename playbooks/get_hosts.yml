@@ -1,7 +1,7 @@
 ---
 - name: Fetch hosts (Page {{ item }})
   uri:
-    url: "{{ api_url }}?page={{ item }}&per_page={{ per_page }}&staleness={{ staleness }}"
+    url: "{{ api_url }}?page={{ item }}&per_page={{ per_page }}{{ extra_params }}"
     method: GET
     headers:
       Authorization: "Bearer {{ rh_api_token }}"
