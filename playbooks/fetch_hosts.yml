@@ -49,11 +49,11 @@
     - name: Append results to host list
       set_fact:
         all_hosts: "{{ all_hosts | default([]) + response.json.results }}"
-        total_pages: "{{ ( response.json.total | int / per_page | float ) | round(0, 'ceil') | int }}"
+        total_pages: "{{ ( response.json.total / per_page ) | round(0, 'ceil') | int }}"
 
     - name: Fetch remaining pages
       include_tasks: get_hosts.yml
-      loop: "{{ range(2, total_pages | int) | list }}"
+      loop: "{{ range(2, (total_pages | int) +1) | list }}"
 
     - name: Display all retrieved hosts
       debug:
