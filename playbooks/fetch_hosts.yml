@@ -9,7 +9,7 @@
     auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
     api_url: "https://console.redhat.com/api/inventory/v1/hosts"
     per_page: 100
-    staleness: fresh
+    extra_params: "&staleness=fresh&staleness=stale"
     all_hosts: []
   tasks:
     - name: Get Red Hat API access token
@@ -36,7 +36,7 @@
 
     - name: Fetch first page of hosts (page 1)
       uri:
-        url: "{{ api_url }}?page=1&per_page={{ per_page }}&staleness={{ staleness }}"
+        url: "{{ api_url }}?page=1&per_page={{ per_page }}{{ extra_params }}"
         method: GET
         headers:
           Authorization: "Bearer {{ rh_api_token }}"
