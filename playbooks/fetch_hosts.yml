@@ -48,7 +48,7 @@
  
     - name: Append results to host list
       set_fact:
-        all_hosts: "{{ all_hosts | default([]) + response.json.results }}"
+        all_hosts: "{{ all_hosts + (response.json.results | default([])) }}"
         total_pages: "{{ ( response.json.total / per_page ) | round(0, 'ceil') | int }}"
 
     - name: Fetch remaining pages
@@ -59,3 +59,8 @@
     - name: Display all retrieved hosts
       debug:
         msg: "Total hosts retrieved {{ all_hosts | length }}"
+
+    - name: Dump all_hosts to JSON file
+      copy:
+        content: "{{ all_hosts | to_nice_json }}"
+        dest: "all_hosts_dump.json"
