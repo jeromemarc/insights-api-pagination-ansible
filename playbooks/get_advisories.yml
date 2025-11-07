@@ -1,0 +1,62 @@
+---
+# Fetch patch system data (RHSA/RHBA/RHEA counts) and merge into host data
+
+- name: "Get total number of systems"
+  uri:
+    url: "{{ patch_api_url }}?limit=1&offset=0"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ rh_api_token }}"
+      Accept: "application/json"
+    return_content: yes
+  register: initial_systems_response
+
+- name: "Set total items"
+  set_fact:
+    total_items: "{{ initial_systems_response.json.meta.total_items }}"
+
+- name: "Fetch all systems with patch counts (paginated)"
+  uri:
+    url: "{{ patch_api_url }}?limit={{ per_page }}&offset={{ offset }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ rh_api_token }}"
+      Accept: "application/json"
+    return_content: yes
+  register: systems_response
+  retries: 3
+  delay: 2
+  until: systems_response.status == 200
+  loop: "{{ query('sequence', 'start=0 end=' ~ total_items ~ ' stride=' ~ per_page) }}"
+  loop_control:
+    loop_var: offset
+
+- name: "Combine paginated systems into a single list"
+  set_fact:
+    all_systems_data: >-
+      {%- set combined = [] -%}
+      {%- for r in systems_response.results -%}
+      {%-   set _ = combined.extend(r.json.data) -%}
+      {%- endfor -%}
+      {{ combined }}
+
+- name: "Build host advisories info mapping"
+  set_fact:
+    host_patch_map: >-
+      {%- set map = {} -%}
+      {%- for sys in all_systems_data -%}
+      {%-   set _ = map.update({sys.id: sys.attributes}) -%}
+      {%- endfor -%}
+      {{ map }}
+
+- name: "Merge advisories info into hosts under 'advisories'"
+  set_fact:
+    all_hosts_with_advisories: >-
+      {%- set merged = [] -%}
+      {%- for h in all_hosts_with_tags -%}
+      {%-   set host_copy = h.copy() -%}
+      {%-   set patch_info = host_patch_map.get(h.id, {}) -%}
+      {%-   set _ = host_copy.update({'advisories': patch_info}) -%}
+      {%-   set _ = merged.append(host_copy) -%}
+      {%- endfor -%}
+      {{ merged }}
