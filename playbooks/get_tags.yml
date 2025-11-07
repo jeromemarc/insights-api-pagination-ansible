@@ -1,0 +1,45 @@
+---
+# Fetch tags for all hosts in batches and merge into host data
+
+- name: "Prepare list of all host IDs"
+  set_fact:
+    host_id_list: "{{ all_hosts | map(attribute='id') | list }}"
+
+- name: "Batch host IDs for tag lookups"
+  set_fact:
+    host_id_batches: "{{ host_id_list | batch(batch_size) | list }}"
+  vars:
+    batch_size: 50
+
+- name: "Fetch tags for each batch of hosts"
+  uri:
+    url: "{{ api_url }}/{{ item | join(',') }}/tags?per_page=100&page=1"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ rh_api_token }}"
+      Accept: "application/json"
+    return_content: yes
+  register: batch_tag_results
+  loop: "{{ host_id_batches }}"
+  loop_control:
+    label: "Batch starting with {{ (item | first)[:8] }}"
+  retries: 3
+  delay: 2
+  until: batch_tag_results is succeeded
+
+- name: "Build mapping of host_id → tags"
+  set_fact:
+    host_tags_map: "{{ host_tags_map | default({}) | combine(item.json.results | default({})) }}"
+  loop: "{{ batch_tag_results.results }}"
+  when: item.json.results is defined
+
+- name: "Merge tags into host data"
+  set_fact:
+    all_hosts_with_tags: >-
+      {%- set merged = [] -%}
+      {%- for h in all_hosts -%}
+      {%-   set host_with_tags = h.copy() -%}
+      {%-   set _ = host_with_tags.update({'tags': host_tags_map.get(h.id, [])}) -%}
+      {%-   set _ = merged.append(host_with_tags) -%}
+      {%- endfor -%}
+      {{ merged }}
