@@ -1,0 +1,69 @@
+---
+- name: Fetch all hosts from Red Hat Insights API with token authentication & pagination
+  hosts: localhost
+  gather_facts: no
+  vars:
+    # HCC service account credentials
+    hcc_client_id: "{{ lookup('env', 'HCC_CLIENT_ID') }}"
+    hcc_client_secret: "{{ lookup('env', 'HCC_CLIENT_SECRET') }}"
+    auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+    api_url: "https://console.redhat.com/api/inventory/v1/hosts"
+    per_page: 100
+    extra_params: "&staleness=fresh&staleness=stale"
+    all_hosts: []
+  tasks:
+    - name: Get Red Hat API access token
+      ansible.builtin.uri:
+        url: "{{ auth_url }}"
+        method: POST
+        body_format: form-urlencoded
+        status_code: 200
+        return_content: true
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
+        body:
+          client_id: "{{ hcc_client_id }}"
+          client_secret: "{{ hcc_client_secret }}"
+          scope: "api.console"
+          grant_type: "client_credentials"
+      register: auth_response
+      no_log: true
+
+    - name: Extract and validate API token
+      set_fact:
+        rh_api_token: "{{ auth_response.json.access_token }}"
+      failed_when: rh_api_token is not defined or rh_api_token | length == 0
+
+    - name: Fetch first page of hosts (page 1)
+      uri:
+        url: "{{ api_url }}?page=1&per_page={{ per_page }}{{ extra_params }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+      register: response
+      no_log: true
+      failed_when: response.json is not defined or response.json.results is not defined
+ 
+    - name: Append results to host list
+      set_fact:
+        all_hosts: "{{ all_hosts + (response.json.results | default([])) }}"
+        total_pages: "{{ ( response.json.total / per_page ) | round(0, 'ceil') | int }}"
+
+    - name: Fetch remaining pages
+      include_tasks: get_hosts.yml
+      loop: "{{ range(2, (total_pages | int) +1) | list }}"
+      when: total_pages | int > 1
+
+    - name: "Include tag fetching tasks"
+      include_tasks: get_tags.yml
+
+    - name: Display all retrieved hosts
+      debug:
+        msg: "Total hosts retrieved {{ all_hosts | length }}"
+
+    - name: Dump all_hosts to JSON file
+      copy:
+        content: "{{ all_hosts_with_tags | to_nice_json }}"
+        dest: "all_hosts_dump.json"
